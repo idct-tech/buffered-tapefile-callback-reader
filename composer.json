@@ -1,0 +1,21 @@
+{
+    "name": "idct/buffered-tapefile-callback-reader",
+    "description": "Buffered reader of string files which can be interpreted as tapes, which we always parse by moving forward. Based on specific cases a callback returning expected data can be fired.",
+    "type": "library",
+    "license": "MIT",
+    "require": {
+        "php": "^5.6 || ^7.0"
+    },
+    "authors": [
+        {
+            "name": "IDCT Bartosz Pachołek",
+            "email": "bartosz@idct.pl"
+        }
+    ],
+    "autoload": {
+        "psr-4": {
+            "IDCT\\": "src/"
+        }
+    },
+    "minimum-stability": "dev"
+}
