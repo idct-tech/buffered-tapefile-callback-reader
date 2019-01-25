@@ -1,4 +1,5 @@
 <?php
+
 namespace IDCT;
 
 class BufferedTapefileCallbackReader
@@ -49,23 +50,6 @@ class BufferedTapefileCallbackReader
     }
 
     /**
-     * Sets buffersize in bytes. At least 1KB required.
-     *
-     * @param int buffersize
-     * @throws UnexpectedValueException
-     * @return $this
-     */
-    protected function setBuffersize($buffersize) {
-        $buffersize = intval($buffersize);
-        if ($buffersize < 1024) {
-            throw new \UnexpectedValueException("Buffersize should be at least 1KB. Given: " . $buffersize);
-        }
-
-        $this->buffersize = $buffersize;
-        return $this;
-    }
-
-    /**
      * Returns buffersize. 100000000 by default.
      *
      * @return int
@@ -75,44 +59,52 @@ class BufferedTapefileCallbackReader
         return $this->buffersize;
     }
 
-    public function setCaptureStartString($string) {
+    public function setCaptureStartString($string)
+    {
         $this->captureStartString = $string;
         $this->captureStartStringLen = strlen($string);
+
         return $this;
     }
 
-    public function getCaptureStartString() {
+    public function getCaptureStartString()
+    {
         return $this->captureStartString;
     }
 
-    public function setCaptureEndString($string) {
+    public function setCaptureEndString($string)
+    {
         $this->captureEndString = $string;
         $this->captureEndStringLen = strlen($string);
+
         return $this;
     }
 
-    public function getCaptureEndString() {
+    public function getCaptureEndString()
+    {
         return $this->captureEndString;
     }
 
-    public function setCallback($callback) {
-        $this->callback;
+    public function setCallback($callback)
+    {
+        $this->callback = $callback;
+
         return $this;
     }
 
     public function runReading()
     {
         $hitpoint = 0.8 * $this->getBuffersize();
-        $file = fopen($filed, 'r');
-        $c = $this->getNext($file, $buffersize);
+        $file = $this->file;
+        $c = $this->getNext($file, $this->getBuffersize());
         //now when we reach 3/4 of the buffer with offset then we load additional part
         $offset = 0;
-        $capturesLen = $this->captureStartStringLen + $this->captureEndStringLen;
-        while( ($offset = strpos($c, $this->captureStartString, $offset + 1)) !== false) {
+        $capturesLen = $this->captureEndStringLen;
+        while (($offset = strpos($c, $this->captureStartString, $offset + 1)) !== false) {
             if ($offset > $hitpoint) {
                 $offset -= $hitpoint;
                 $c = substr($c, $hitpoint);
-                $c .= $this->getNext($file, $buffersize);
+                $c .= $this->getNext($file, $this->getBuffersize());
             }
             //todo skipping
             //we look for next one:
@@ -131,4 +123,36 @@ class BufferedTapefileCallbackReader
         fclose($file);
     }
 
+    public function getNext($file, $buffersize)
+    {
+        $c = '';
+        while ($temp = fgets($file, $buffersize)) {
+            $c .= $temp;
+            $len = strlen($c);
+            if ($len >= $buffersize - 1) {
+                break;
+            }
+        }
+
+        return $c;
+    }
+
+    /**
+     * Sets buffersize in bytes. At least 1KB required.
+     *
+     * @param int buffersize
+     * @throws UnexpectedValueException
+     * @return $this
+     */
+    protected function setBuffersize($buffersize)
+    {
+        $buffersize = intval($buffersize);
+        if ($buffersize < 1024) {
+            throw new \UnexpectedValueException("Buffersize should be at least 1KB. Given: " . $buffersize);
+        }
+
+        $this->buffersize = $buffersize;
+
+        return $this;
+    }
 }
