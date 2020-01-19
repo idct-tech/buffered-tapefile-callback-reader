@@ -4,8 +4,7 @@
     "type": "library",
     "license": "MIT",
     "require": {
-        "php": "^5.6 || ^7.0",
-        "idct/php-array-file-cache": "^0.2"
+        "php": "^7.0"
     },
     "authors": [
         {
@@ -17,6 +16,14 @@
         "psr-4": {
             "IDCT\\": "src/"
         }
+    },
+    "require-dev": {
+        "friendsofphp/php-cs-fixer": "^2.16"
+    },
+    "scripts": {
+        "fix": [
+            "bash fix-code.sh"
+        ]
     },
     "minimum-stability": "dev"
 }

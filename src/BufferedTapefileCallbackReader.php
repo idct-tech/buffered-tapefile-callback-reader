@@ -2,10 +2,43 @@
 
 namespace IDCT;
 
+use Closure;
+use LogicException;
+use UnexpectedValueException;
+
+/**
+ * Buffered Tapefile Callback Reader
+ *
+ * Allows reading of efficent (buffered) reading of tape files with an option to maintain a high precision
+ * of keeping a memory regime.
+ *
+ * What is a tape file?
+ * It is a file which progresses only in one direction: so next lines are next values, next objects,
+ * highly independent from previous entries in the same file.
+ *
+ * A good example would be a dump of objects in a hotel and prices per stay on a particular date.
+ */
 class BufferedTapefileCallbackReader
 {
+    /**
+     * Opened file's resource.
+     *
+     * @var Resource
+     */
     protected $file;
+
+    /**
+     * Size of the lookup buffer in bytes.
+     *
+     * @var int
+     */
     protected $buffersize;
+
+    /**
+     * Method which is executed when a desired fragment of text is caputured.
+     *
+     * @var Closure
+     */
     protected $callback;
 
     /**
@@ -13,7 +46,7 @@ class BufferedTapefileCallbackReader
      *
      * @return $this
      */
-    public function close()
+    public function close() : self
     {
         if (is_resource($this->file)) {
             fclose($this->file);
@@ -44,6 +77,7 @@ class BufferedTapefileCallbackReader
             throw new \RuntimeException('Failed to open file and acquire resource handle - file: `' . $filename . '`.');
         }
 
+        //sets the buffer
         $this->setBuffersize($bufferSize);
 
         return $this;
@@ -54,12 +88,19 @@ class BufferedTapefileCallbackReader
      *
      * @return int
      */
-    public function getBuffersize()
+    public function getBuffersize() : int
     {
         return $this->buffersize;
     }
 
-    public function setCaptureStartString($string)
+    /**
+     * Sets the string which starts capturing of a value: text from the parsed file will be added to a temporary value
+     * until string which identifies the end of capturing (setCaptureEndString) is found.
+     *
+     * @param string $string
+     * @return $this
+     */
+    public function setCaptureStartString(string $string) : self
     {
         $this->captureStartString = $string;
         $this->captureStartStringLen = strlen($string);
@@ -67,12 +108,23 @@ class BufferedTapefileCallbackReader
         return $this;
     }
 
-    public function getCaptureStartString()
+    /**
+     * Gets the string which starts capturing of a value.
+     *
+     * @return string|null
+     */
+    public function getCaptureStartString() : ?string
     {
         return $this->captureStartString;
     }
 
-    public function setCaptureEndString($string)
+    /**
+     * Sets the string which finishes caputring of a value.
+     *
+     * @param string $string
+     * @return $this
+     */
+    public function setCaptureEndString(string $string) : self
     {
         $this->captureEndString = $string;
         $this->captureEndStringLen = strlen($string);
@@ -80,23 +132,57 @@ class BufferedTapefileCallbackReader
         return $this;
     }
 
+    /**
+     * Gets the string which finishes caputring of a value.
+     *
+     * @param string $string
+     * @return $this
+     */
     public function getCaptureEndString()
     {
         return $this->captureEndString;
     }
 
-    public function setCallback($callback)
+    /**
+     * Callback (function) which is executed when a value identified by start and end string is matched.
+     * Function should accept one string argument which will should the captured value.
+     *
+     * @param Closure $callback
+     * @return $this
+     */
+    public function setCallback(Closure $callback) : self
     {
         $this->callback = $callback;
 
         return $this;
     }
 
-    public function runReading()
+    /**
+     * Main method which performs the execution of a loop which runs thru the file, looks for desired values
+     * identified by capture start/end strings and executes callbacks with the values whenever there is a match.
+     *
+     * @throws LogicException
+     * @return $this
+     */
+    public function run() : self
     {
+        if (!is_resource($this->file)) {
+            throw new LogicException("Invalid state: file not opened.");
+        }
+
+        if (!empty($this->captureStartString)) {
+            throw new LogicException("Invalid state: start string not set.");
+        }
+
+        if (!empty($this->captureStartString)) {
+            throw new LogicException("Invalid state: end string not set.");
+        }
+        
+        //hitpoint is the "moment" when script will attempt to load additional contents into the buffer and forget
+        //about the previous contents
         $hitpoint = 0.8 * $this->getBuffersize();
         $file = $this->file;
-        $c = $this->getNext($file, $this->getBuffersize());
+        $c = $this->getNext();
         //now when we reach 3/4 of the buffer with offset then we load additional part
         $offset = 0;
         $capturesLen = $this->captureEndStringLen;
@@ -104,7 +190,7 @@ class BufferedTapefileCallbackReader
             if ($offset > $hitpoint) {
                 $offset -= $hitpoint;
                 $c = substr($c, $hitpoint);
-                $c .= $this->getNext($file, $this->getBuffersize());
+                $c .= $this->getNext();
             }
             //todo skipping
             //we look for next one:
@@ -121,15 +207,22 @@ class BufferedTapefileCallbackReader
             call_user_func($this->callback, $objString);
         }
         fclose($file);
+
+        return $this;
     }
 
-    public function getNext($file, $buffersize)
+    /**
+     * Loads next bytes from the file into the buffer.
+     *
+     * @return string
+     */
+    protected function getNext() : string
     {
         $c = '';
-        while ($temp = fgets($file, $buffersize)) {
+        while ($temp = fgets($this->file, $this->buffersize)) {
             $c .= $temp;
             $len = strlen($c);
-            if ($len >= $buffersize - 1) {
+            if ($len >= $this->buffersize - 1) {
                 break;
             }
         }
@@ -144,11 +237,11 @@ class BufferedTapefileCallbackReader
      * @throws UnexpectedValueException
      * @return $this
      */
-    protected function setBuffersize($buffersize)
+    protected function setBuffersize(int $buffersize) : self
     {
         $buffersize = intval($buffersize);
-        if ($buffersize < 1024) {
-            throw new \UnexpectedValueException("Buffersize should be at least 1KB. Given: " . $buffersize);
+        if ($buffersize < 1) {
+            throw new UnexpectedValueException("Buffersize should be at least 1B. Given: " . $buffersize);
         }
 
         $this->buffersize = $buffersize;
