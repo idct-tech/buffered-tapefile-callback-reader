@@ -42,6 +42,36 @@ class BufferedTapefileCallbackReader
     protected $callback;
 
     /**
+     * String which finishes caputring of a value.
+     *
+     * @var string
+     */
+    protected $captureEndString;
+
+    /**
+     * Length of the string which finishes caputring of a value.
+     * Calculated value is stored to avoid recalculation.
+     *
+     * @var int
+     */
+    protected $captureEndStringLen;
+
+    /**
+     * The string which starts capturing of a value.
+     *
+     * @var string
+     */
+    protected $captureStartString;
+
+    /**
+     * Length of the string which starts caputring of a value.
+     * Calculated value is stored to avoid recalculation.
+     *
+     * @var int
+     */
+    protected $captureStartStringLen;
+
+    /**
      * Closes any file handle if any is open (if $file is a resource handle).
      *
      * @return $this
@@ -174,7 +204,7 @@ class BufferedTapefileCallbackReader
             throw new LogicException("Invalid state: start string not set.");
         }
 
-        if (empty($this->captureEndString)) {
+        if (empty($this->captureStartString)) {
             throw new LogicException("Invalid state: end string not set.");
         }
         
@@ -182,29 +212,22 @@ class BufferedTapefileCallbackReader
         //about the previous contents
         $hitpoint = 0.8 * $this->getBuffersize();
         $file = $this->file;
+
         $c = $this->getNext();
+
         //now when we reach 3/4 of the buffer with offset then we load additional part
         $offset = 0;
-        $capturesLen = $this->captureEndStringLen;
-        while (($offset = strpos($c, $this->captureStartString, $offset + 1)) !== false) {
+        while (($offset = strpos($c, $this->captureStartString, $offset)) !== false) {
+            //we add the length of capture string to offset to avoid looking for the same string
             if ($offset > $hitpoint) {
                 $offset -= $hitpoint;
                 $c = substr($c, $hitpoint);
                 $c .= $this->getNext();
             }
-            //todo skipping
-            //we look for next one:
-            $offsetNext = strpos($c, $this->captureStartString, $offset + 1);
-            //to check if it would be earlier than next end:
-            $objEnd = strpos($c, $this->captureEndString, $offset + 1);
-            //if so then it means we have an empty entry
-            if ($offsetNext < $objEnd) {
-                //empty entry
-                continue;
-            }
-
-            $objString = substr($c, $offset, $objEnd - $offset + $capturesLen);
+            $objEnd = strpos($c, $this->captureEndString, $offset);
+            $objString = substr($c, $offset, $objEnd - $offset + $this->captureEndStringLen);
             call_user_func($this->callback, $objString);
+            $offset = $objEnd + strlen($this->captureEndStringLen);
         }
         fclose($file);
 
@@ -219,7 +242,7 @@ class BufferedTapefileCallbackReader
     protected function getNext() : string
     {
         $c = '';
-        while ($temp = fgets($this->file, $this->buffersize)) {
+        while ($temp = fread($this->file, $this->buffersize)) {
             $c .= $temp;
             $len = strlen($c);
             if ($len >= $this->buffersize - 1) {
