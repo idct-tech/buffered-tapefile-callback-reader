@@ -170,11 +170,11 @@ class BufferedTapefileCallbackReader
             throw new LogicException("Invalid state: file not opened.");
         }
 
-        if (!empty($this->captureStartString)) {
+        if (empty($this->captureStartString)) {
             throw new LogicException("Invalid state: start string not set.");
         }
 
-        if (!empty($this->captureStartString)) {
+        if (empty($this->captureEndString)) {
             throw new LogicException("Invalid state: end string not set.");
         }
         
