@@ -225,7 +225,7 @@ class BufferedTapefileCallbackReader
                 $c .= $this->getNext();
             }
             $objEnd = strpos($c, $this->captureEndString, $offset);
-            $objString = substr($c, $offset, $objEnd - $offset + $this->captureEndStringLen);
+            $objString = substr($c, $offset, $objEnd - $offset + $this->captureEndStringLen + 1);
             call_user_func($this->callback, $objString);
             $offset = $objEnd + $this->captureEndStringLen;
         }
