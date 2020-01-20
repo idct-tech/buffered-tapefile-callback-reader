@@ -210,25 +210,85 @@ class BufferedTapefileCallbackReader
         
         //hitpoint is the "moment" when script will attempt to load additional contents into the buffer and forget
         //about the previous contents
-        $hitpoint = 0.8 * $this->getBuffersize();
+        
         $file = $this->file;
-
-        $c = $this->getNext();
 
         //now when we reach 3/4 of the buffer with offset then we load additional part
         $offset = 0;
-        while (($offset = strpos($c, $this->captureStartString, $offset)) !== false) {
-            //we add the length of capture string to offset to avoid looking for the same string
-            if ($offset > $hitpoint) {
-                $offset -= $hitpoint;
-                $c = substr($c, $hitpoint);
-                $c .= $this->getNext();
+
+        /**
+         * 0 - looking for start
+         * 1 - collecting
+         * 2 - found end
+         */
+        $lastFound = '';
+        $collecting = false;
+        $buffer = $this->getNext();
+        $offset = 0;
+
+        while (true) {
+            //load two in case of a partial
+            $buffer .= $this->getNext();
+            while (true) {
+                if ($collecting === false) {
+                    //nie zbieram
+                    $ofStart  = $offset - $this->captureStartStringLen;
+                    if ($ofStart < 0) {
+                        $ofStart = 0;
+                    }
+                    if (($offsetStart = strpos($buffer, $this->captureStartString, $ofStart)) !== false) {
+                        //znalazlem poczatek
+                        if (($offsetEnd = strpos($buffer, $this->captureEndString, $offsetStart + $this->captureStartStringLen)) !== false) {
+                            //znalazlem tez koniec
+                            $endLenOffset = $offsetEnd + $this->captureEndStringLen;
+                            $objString = substr($buffer, $offsetStart, $endLenOffset - $offsetStart);
+                            call_user_func($this->callback, $objString, 0);
+                            $offset = $endLenOffset;
+                        } else {
+                            //jednak tylko poczatek
+                            $lastFound = substr($buffer, $offsetStart);
+                            $offset = $offsetStart;
+                            $collecting = true;
+                            break;
+                        }
+                    } else {
+                        //nic nie znalazlem
+                        $offset = 0;
+                        break;
+                    }
+                } else {
+                    //zbieram
+                    if (($offsetEnd = strpos($buffer, $this->captureEndString, $offset - $this->captureEndStringLen)) !== false) {
+                        //mam koniec
+
+                        $start = $offset < $this->buffersize ? $this->buffersize : $offset;
+                        $lastFound .= substr($buffer, $start, $offsetEnd + $this->captureEndStringLen - $start);
+
+                        call_user_func($this->callback, $lastFound, 1);
+                        $lastFound = '';
+                        $collecting = false;
+                        $offset = $offsetEnd + $this->captureEndStringLen;
+                    } else {
+                        //nie mam konca
+                        $lastFound .= substr($buffer, $this->buffersize);
+
+                        $offset = 0;
+                        break;
+                    }
+                }
             }
-            $objEnd = strpos($c, $this->captureEndString, $offset);
-            $objString = substr($c, $offset, $objEnd - $offset + $this->captureEndStringLen + 1);
-            call_user_func($this->callback, $objString);
-            $offset = $objEnd + $this->captureEndStringLen;
+
+            if (feof($this->file)) {
+                break;
+            }
+            //strip one part
+            $buffer = substr($buffer, $this->getBuffersize());
+            $offset -= $this->buffersize;
+            if ($offset < 0) {
+                $offset = 0;
+            }
         }
+    
         fclose($file);
 
         return $this;
